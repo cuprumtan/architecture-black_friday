@@ -1,0 +1,67 @@
+name: mongo-sharding
+
+services:
+  config_server:
+    container_name: config_server
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --configsvr --replSet configRS --port 27017 --dbpath /data/db
+    volumes:
+      - config_server_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard1:
+    container_name: shard1
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    volumes:
+      - shard1_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard2:
+    container_name: shard2
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard2RS --port 27019 --dbpath /data/db
+    volumes:
+      - shard2_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  mongos:
+    container_name: mongos
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongos --configdb configRS/config_server:27017 --port 27017 --bind_ip_all
+    depends_on:
+      - config_server
+      - shard1
+      - shard2
+    ports:
+      - "27017:27017"
+    networks:
+      - mongo_sharding_network
+
+  pymongo_api:
+    container_name: pymongo_api
+    image: kazhem/pymongo_api:1.0.0
+    build:
+      context: api_app
+      dockerfile: Dockerfile
+    depends_on:
+      - mongos
+    ports:
+      - "8080:8080"
+    environment:
+      MONGODB_URL: "mongodb://mongos:27017"
+      MONGODB_DATABASE_NAME: "somedb"
+    networks:
+      - mongo_sharding_network
+
+volumes:
+  config_server_data:
+  shard1_data:
+  shard2_data:
+
+networks:
+  mongo_sharding_network:
+    driver: bridge
