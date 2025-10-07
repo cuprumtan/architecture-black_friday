@@ -1,0 +1,148 @@
+name: sharding-repl-cache
+
+services:
+  # Redis ##############################################################################################################
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - mongo_sharding_network
+
+  # Config Server ######################################################################################################
+  config_server_1:
+    container_name: config_server_1
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --configsvr --replSet configRS --port 27017 --dbpath /data/db
+    volumes:
+      - config_server_1_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  config_server_2:
+    container_name: config_server_2
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --configsvr --replSet configRS --port 27017 --dbpath /data/db
+    volumes:
+      - config_server_2_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  config_server_3:
+    container_name: config_server_3
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --configsvr --replSet configRS --port 27017 --dbpath /data/db
+    volumes:
+      - config_server_3_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  # Shard 1 ############################################################################################################
+  shard1_1:
+    container_name: shard1_1
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    volumes:
+      - shard1_1_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard1_2:
+    container_name: shard1_2
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    volumes:
+      - shard1_2_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard1_3:
+    container_name: shard1_3
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    volumes:
+      - shard1_3_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  # Shard 2 ############################################################################################################
+  shard2_1:
+    container_name: shard2_1
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard2RS --port 27019 --dbpath /data/db
+    volumes:
+      - shard2_1_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard2_2:
+    container_name: shard2_2
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard2RS --port 27019 --dbpath /data/db
+    volumes:
+      - shard2_2_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  shard2_3:
+    container_name: shard2_3
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongod --shardsvr --replSet shard2RS --port 27019 --dbpath /data/db
+    volumes:
+      - shard2_3_data:/data/db
+    networks:
+      - mongo_sharding_network
+
+  # Mongos #############################################################################################################
+  mongos:
+    container_name: mongos
+    image: dh-mirror.gitverse.ru/mongo:latest
+    command: mongos --configdb configRS/config_server_1:27017,config_server_2:27017,config_server_3:27017 --port 27017 --bind_ip_all
+    depends_on:
+      - config_server_1
+      - config_server_2
+      - config_server_3
+      - shard1_1
+      - shard1_2
+      - shard1_3
+      - shard2_1
+      - shard2_2
+      - shard2_3
+    ports:
+      - "27017:27017"
+    networks:
+      - mongo_sharding_network
+
+  # API ################################################################################################################
+  pymongo_api:
+    container_name: pymongo_api
+    build:
+      context: api_app
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+      - mongos
+    ports:
+      - "8080:8080"
+    environment:
+      MONGODB_URL: "mongodb://mongos:27017"
+      MONGODB_DATABASE_NAME: "somedb"
+      REDIS_URL: "redis://redis:6379"
+    networks:
+      - mongo_sharding_network
+
+volumes:
+  config_server_1_data:
+  config_server_2_data:
+  config_server_3_data:
+  shard1_1_data:
+  shard1_2_data:
+  shard1_3_data:
+  shard2_1_data:
+  shard2_2_data:
+  shard2_3_data:
+
+networks:
+  mongo_sharding_network:
+    driver: bridge
